@@ -1,0 +1,47 @@
+{
+  "name": "dff-skills",
+  "version": "1.0.0",
+  "description": "DesignForFeature CLI to install SKILL.md packs for Cursor, Copilot, Continue, and Gravity",
+  "bin": {
+    "dff-skills": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "pp": "npm run build",
+    "start": "node dist/cli.js",
+    "prepublishOnly": "npm run build",
+    "skills": "npx --yes . encore-mongo"
+  },
+  "keywords": [
+    "dff",
+    "cursor",
+    "skills",
+    "skill.md",
+    "agent-skills",
+    "cli",
+    "encore-mongo",
+    "encore-pg",
+    "next-daisy",
+    "gluestack",
+    "copilot",
+    "continue",
+    "antigravity"
+  ],
+  "author": "DesignForFeature",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2"
+  }
+}
