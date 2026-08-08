@@ -1,6 +1,6 @@
 # dff-skills
 
-DesignForFeature CLI that copies packaged skill markdown into the **current project** as a direct `SKILL.md` file (no pack subfolders).
+DesignForFeature CLI that copies packaged skill markdown into the **current project** as `SKILL.md`.
 
 ```bash
 npx dff-skills encore-mongo
@@ -9,27 +9,30 @@ npx dff-skills encore-mongo
 Creates:
 
 ```text
-.agent/SKILL.md
+.agent/skills/encore-mongo/SKILL.md
 ```
 
 ## Install behavior
 
 | Command | Where it installs |
 | ------- | ----------------- |
-| `npx dff-skills <pack>` | **Only** `.agent/SKILL.md` |
-| `npx dff-skills <pack> -a cursor` | `.agents/SKILL.md` + `.cursor/SKILL.md` |
-| `npx dff-skills <pack> -a all` | all supported agent dirs |
+| `npx dff-skills <pack>` | **Only** `.agent/skills/<name>/SKILL.md` |
+| `npx dff-skills arch` | Enterprise architecture skill |
+| `npx dff-skills figma` | Figma / prototype analysis skill |
+| `npx dff-skills <pack> -a cursor` | Cursor skill dirs only |
+| `npx dff-skills <pack> -a all` | all supported agents |
 
 Existing `SKILL.md` files are **always replaced**.
 
 ### With `-a` / `--agent`
 
-| Agent | Project files |
+| Agent | Project paths |
 | ----- | ------------- |
-| `cursor` | `.agents/SKILL.md`, `.cursor/SKILL.md` |
-| `copilot` | `.agents/SKILL.md`, `.github/SKILL.md` |
-| `continue` | `.continue/SKILL.md` |
-| `gravity` | `.agents/SKILL.md`, `.agent/SKILL.md` |
+| `cursor` | `.agents/skills/<name>/`, `.cursor/skills/<name>/` |
+| `copilot` | `.agents/skills/<name>/`, `.github/skills/<name>/` |
+| `continue` | `.continue/skills/<name>/` |
+| `gravity` | `.agents/skills/<name>/`, `.agent/skills/<name>/` |
+| `jcode` | `.jcode/skills/<name>/` |
 
 ## How it works
 
@@ -39,18 +42,21 @@ Skill sources live in this package under `skills/`:
 - `skills/encore-pg.md`
 - `skills/next-daisy.md`
 - `skills/gluestack.md`
+- `skills/arch.md`
+- `skills/figma.md`
 
-The chosen pack content is written as `SKILL.md` in the target folder (not `skills/<pack>/SKILL.md`).
+Running `npx dff-skills <name>` copies that file to `.agent/skills/<name>/SKILL.md`.
 
 ## Usage
 
 ```bash
-# Default → .agent/SKILL.md
+# Default → .agent/skills/<name>/SKILL.md
 npx dff-skills encore-mongo
 
 # Specific agents
 npx dff-skills encore-mongo -a cursor
 npx dff-skills gluestack -a cursor -a continue
+npx dff-skills encore-mongo -a jcode
 
 # All agents
 npx dff-skills encore-mongo -a all

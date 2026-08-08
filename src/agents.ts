@@ -1,58 +1,72 @@
 import os from "node:os";
 import path from "node:path";
 
-export type AgentId = "cursor" | "copilot" | "continue" | "gravity";
+export type AgentId =
+  | "cursor"
+  | "copilot"
+  | "continue"
+  | "gravity"
+  | "jcode";
 
 export type AgentTarget = {
   id: AgentId;
   /** CLI aliases accepted for -a / --agent */
   aliases: string[];
   label: string;
-  /** Relative project dirs that receive SKILL.md directly */
+  /** Relative project skill roots (under cwd) */
   projectDirs: string[];
-  /** Absolute user-level dirs that receive SKILL.md directly */
+  /** Absolute user-level skill roots */
   globalDirs: string[];
 };
 
 /**
- * Default install (no `-a`): `.agent/SKILL.md` (no subfolders).
+ * Default install (no `-a`): `.agent/skills/<name>/SKILL.md`
  */
-export const DEFAULT_PROJECT_DIR = ".agent";
-export const DEFAULT_GLOBAL_DIR = path.join(os.homedir(), ".agent");
+export const DEFAULT_PROJECT_DIR = ".agent/skills";
+export const DEFAULT_GLOBAL_DIR = path.join(os.homedir(), ".agent", "skills");
 export const SKILL_FILENAME = "SKILL.md";
 
 /**
  * Install targets used only when `-a` / `--agent` is passed.
- * Each dir gets a SKILL.md file directly (no pack subfolder).
+ * Each root gets `<name>/SKILL.md`.
  */
 export const AGENTS: AgentTarget[] = [
   {
     id: "cursor",
     aliases: ["cursor"],
     label: "Cursor",
-    projectDirs: [".agents", ".cursor"],
-    globalDirs: [path.join(os.homedir(), ".cursor")],
+    projectDirs: [".agents/skills", ".cursor/skills"],
+    globalDirs: [path.join(os.homedir(), ".cursor", "skills")],
   },
   {
     id: "copilot",
     aliases: ["copilot", "github-copilot", "gh-copilot"],
     label: "GitHub Copilot",
-    projectDirs: [".agents", ".github"],
-    globalDirs: [path.join(os.homedir(), ".copilot")],
+    projectDirs: [".agents/skills", ".github/skills"],
+    globalDirs: [path.join(os.homedir(), ".copilot", "skills")],
   },
   {
     id: "continue",
     aliases: ["continue"],
     label: "Continue",
-    projectDirs: [".continue"],
-    globalDirs: [path.join(os.homedir(), ".continue")],
+    projectDirs: [".continue/skills"],
+    globalDirs: [path.join(os.homedir(), ".continue", "skills")],
   },
   {
     id: "gravity",
     aliases: ["gravity", "antigravity"],
     label: "Gravity (Antigravity)",
-    projectDirs: [".agents", ".agent"],
-    globalDirs: [path.join(os.homedir(), ".gemini", "antigravity")],
+    projectDirs: [".agents/skills", ".agent/skills"],
+    globalDirs: [
+      path.join(os.homedir(), ".gemini", "antigravity", "skills"),
+    ],
+  },
+  {
+    id: "jcode",
+    aliases: ["jcode"],
+    label: "Jcode",
+    projectDirs: [".jcode/skills"],
+    globalDirs: [path.join(os.homedir(), ".jcode", "skills")],
   },
 ];
 
@@ -89,9 +103,9 @@ export function resolveAgents(names: string[]): AgentTarget[] {
 }
 
 /**
- * Directories that receive SKILL.md.
- * - No `-a`: only `.agent`
- * - With `-a`: only the selected agent dirs
+ * Skill root directories for install.
+ * - No `-a`: only `.agent/skills`
+ * - With `-a`: only the selected agent skill roots
  */
 export function skillRootsFor(
   agents: AgentTarget[],

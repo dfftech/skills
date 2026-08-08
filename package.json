@@ -1,7 +1,7 @@
 {
   "name": "dff-skills",
-  "version": "1.0.0",
-  "description": "DesignForFeature CLI to install SKILL.md packs for Cursor, Copilot, Continue, and Gravity",
+  "version": "1.0.1",
+  "description": "DesignForFeature CLI to install SKILL.md packs for Cursor, Copilot, Continue, Gravity, and Jcode",
   "bin": {
     "dff-skills": "dist/cli.js"
   },
@@ -31,9 +31,12 @@
     "encore-pg",
     "next-daisy",
     "gluestack",
+    "arch",
+    "figma",
     "copilot",
     "continue",
-    "antigravity"
+    "antigravity",
+    "jcode"
   ],
   "author": "DesignForFeature",
   "license": "MIT",

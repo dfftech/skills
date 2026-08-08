@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { AGENTS, DEFAULT_PROJECT_DIR, SKILL_FILENAME } from "./agents";
+import { AGENTS, DEFAULT_PROJECT_DIR } from "./agents";
 import { installPack } from "./install";
 import { listPacks, resolvePack, skillsDir } from "./registry";
 
@@ -16,24 +16,26 @@ Examples:
   npx dff-skills encore-pg
   npx dff-skills encore-mongo -a cursor
   npx dff-skills gluestack -a cursor -a copilot
+  npx dff-skills encore-mongo -a jcode
   npx dff-skills encore-mongo -a all
 
 Options:
   -a, --agent <name>   Install for specific agent(s) only
                        (repeatable or comma-separated).
-                       Without -a: installs only to .agent/SKILL.md
-  -g, --global         Install into user-level dirs
+                       Without -a: installs only to .agent/skills/<name>/SKILL.md
+  -g, --global         Install into user-level skill dirs
   -h, --help           Show help
   -l, --list           List available packs
 
 Default (no -a):
-  .agent/SKILL.md
+  .agent/skills/<name>/SKILL.md
 
-Agents (-a) — each gets SKILL.md directly (no subfolders):
-  cursor     .agents/SKILL.md + .cursor/SKILL.md
-  copilot    .agents/SKILL.md + .github/SKILL.md
-  continue   .continue/SKILL.md
-  gravity    .agents/SKILL.md + .agent/SKILL.md  (alias: antigravity)
+Agents (-a):
+  cursor     .agents/skills/<name> + .cursor/skills/<name>
+  copilot    .agents/skills/<name> + .github/skills/<name>
+  continue   .continue/skills/<name>
+  gravity    .agents/skills/<name> + .agent/skills/<name>  (alias: antigravity)
+  jcode      .jcode/skills/<name>
   all        all agents above
 
 Existing SKILL.md files are always replaced.
@@ -73,7 +75,7 @@ async function main(argv: string[]): Promise<void> {
       { global, agents }
     );
     const scope = usedDefault
-      ? `${DEFAULT_PROJECT_DIR}/${SKILL_FILENAME}`
+      ? `${DEFAULT_PROJECT_DIR}/<name>/SKILL.md`
       : installedAgents.map((a) => a.id).join(", ");
     const replacedCount = targets.filter((t) => t.replaced).length;
     console.log(
@@ -160,7 +162,7 @@ function printPackList(): void {
   for (const pack of packs) {
     console.log(`  ${pack.name}`);
   }
-  console.log(`\nDefault (no -a): ${DEFAULT_PROJECT_DIR}/${SKILL_FILENAME}`);
+  console.log(`\nDefault (no -a): ${DEFAULT_PROJECT_DIR}/<name>/SKILL.md`);
   console.log("Agents (-a):");
   for (const agent of AGENTS) {
     console.log(`  ${agent.id.padEnd(10)} ${agent.label}`);

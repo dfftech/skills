@@ -10,12 +10,12 @@ import {
 import type { SkillPack } from "./registry";
 
 export type InstallOptions = {
-  /** Install into user-level agent dirs instead of the project */
+  /** Install into user-level agent skill dirs instead of the project */
   global?: boolean;
   cwd?: string;
   /**
    * Agent ids/aliases from `-a`.
-   * Empty / omitted → install only to `.agent/SKILL.md`.
+   * Empty / omitted → install only to `.agent/skills/<name>/SKILL.md`.
    */
   agents?: string[];
 };
@@ -30,12 +30,12 @@ export type InstallTarget = {
 export type InstallResult = {
   targets: InstallTarget[];
   agents: AgentTarget[];
-  /** True when no `-a` was passed (default `.agent/SKILL.md` only) */
+  /** True when no `-a` was passed (default `.agent/skills` only) */
   usedDefault: boolean;
 };
 
 /**
- * Copy `skills/<name>.md` to `<dir>/SKILL.md` (no pack subfolders).
+ * Copy `skills/<name>.md` to `<root>/<name>/SKILL.md`.
  * Existing SKILL.md files are always replaced.
  */
 export function installPack(
@@ -57,7 +57,8 @@ export function installPack(
   const content = fs.readFileSync(pack.filePath);
   const targets: InstallTarget[] = [];
 
-  for (const targetDir of roots) {
+  for (const root of roots) {
+    const targetDir = path.join(root, pack.name);
     const targetFile = path.join(targetDir, SKILL_FILENAME);
     const replaced = fs.existsSync(targetFile);
 
