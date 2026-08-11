@@ -1,6 +1,6 @@
 {
   "name": "dff-skills",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "DesignForFeature CLI to install SKILL.md packs for Cursor, Copilot, Continue, Gravity, and Jcode",
   "bin": {
     "dff-skills": "dist/cli.js"
