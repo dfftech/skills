@@ -17,18 +17,30 @@ UI source of truth: [All Components](https://gluestack.io/ui/docs/components/all
 
 ## Folder structure
 
+`.ts` = TypeScript only (no JSX). `.tsx` = view / HTML. Same basename as the matching `.tsx` (import `./{module}.list.ts`). No `grid.ts`.
+
 ```
 app/{module}.tsx  or  app/{module}/index.tsx   ← Suspense + ScreenAccess only
 modules/{path}/
-├── {module}.page.tsx                 ← list + modal/drawer (no auth)
-├── {module}.list.tsx
-├── {module}.form.tsx
-├── {module}.view.tsx
-└── hooks/                            ← REQUIRED (all 4)
-    ├── data.ts                       ← init / default values
-    ├── types.ts                      ← all types
-    ├── service.ts                    ← HTTP + signals + editModeUpdate + upload
-    └── validation.ts                 ← form rules
+├── {module}.page.tsx                 ← list + modal/drawer (no auth) — HTML
+├── components/                       ← list + form + view
+│   ├── {module}.list.ts              ← list TypeScript
+│   ├── {module}.list.tsx             ← list HTML
+│   ├── {module}.form.ts              ← form TypeScript (useMemo, handlers)
+│   ├── {module}.form.tsx             ← form HTML
+│   ├── {module}.view.ts              ← view TypeScript
+│   └── {module}.view.tsx             ← view HTML
+├── hooks/                            ← TypeScript
+│   ├── data.ts                       ← init / default values
+│   ├── types.ts                      ← all types
+│   ├── validation.ts                 ← form rules
+│   ├── service.list.ts               ← list HTTP + signals
+│   ├── service.save.ts               ← save HTTP + signals
+│   ├── service.upload.ts             ← upload HTTP
+│   ├── service-load.languages.ts     ← one file per select (`service-load.{select}.ts`)
+│   ├── service-load.country.ts
+│   ├── service-load.role.ts
+│   └── edit-mode.ts                  ← popup signals + editModeUpdate (not HTTP)
 components/ui/   → gluestack primitives (button, input, select, modal, …)
 types/           → TypeButton, TypeInput, TypeSelect, TypeSwitch, … (ALWAYS use)
 layouts/         → ArticleLayout, ContentLayout, FloatLayout (optional)
@@ -54,7 +66,7 @@ From [gluestack All Components](https://gluestack.io/ui/docs/components/all-comp
 
 ## App route (permission + skeleton)
 
-Auth/permission **only** here — never in module pages.
+Auth/permission **only** here — never in module pages. No `SCREEN_ACTION` here.
 
 ```tsx
 // app/profile/index.tsx
@@ -89,17 +101,47 @@ function SkeletonPage() {
 
 ## Module page (list + Modal / Drawer)
 
+ScreenAction **only here** — never in list / form / view. Read `AppStorage.Get(SCREEN_ACTION)`.
+
+| Action | Result |
+|--------|--------|
+| `{module}:list` | popup closed |
+| `{module}:view-{id}` | open view |
+| `{module}:form-{id}` | open form (edit) |
+| `{module}:form` (no `-id`) | open form (new / add) |
+
 ```tsx
 // user.page.tsx
+import { useEffect } from "react";
 import { useSignals } from "@preact/signals-react/runtime";
 import { Modal, ModalBackdrop, ModalContent, ModalBody } from "@/components/ui/modal";
-import { editModeUpdate, userIsEditMode, userIsPopupOpen } from "./hooks/service";
-import UserForm from "./user.form";
-import { UserList } from "./user.list";
-import UserView from "./user.view";
+import { AppStorage, SCREEN_ACTION } from "@/util/app.storage";
+import { editModeUpdate, userIsEditMode, userIsPopupOpen } from "./hooks/edit-mode";
+import UserForm from "./components/user.form";
+import { UserList } from "./components/user.list";
+import UserView from "./components/user.view";
+
+function applyUserScreenAction() {
+  const action = String(AppStorage.Get(SCREEN_ACTION) || "user:list");
+  if (action === "user:list") {
+    editModeUpdate(undefined);
+    return;
+  }
+  if (action.startsWith("user:view-")) {
+    const id = action.slice("user:view-".length);
+    editModeUpdate(id || undefined);
+    return;
+  }
+  if (action.startsWith("user:form")) {
+    const id = action.startsWith("user:form-") ? action.slice("user:form-".length) : "";
+    if (!id) editModeUpdate(undefined, "add");
+    else editModeUpdate(id, "edit");
+  }
+}
 
 export function UserPage() {
   useSignals();
+  useEffect(() => { applyUserScreenAction(); }, []);
   return (
     <>
       <UserList />
@@ -122,14 +164,17 @@ Prefer gluestack `Modal` / `Drawer` / `Actionsheet` — not web-only daisy class
 
 ## hooks/ — required
 
-### `hooks/data.ts` · `hooks/types.ts` · `hooks/validation.ts`
+### `hooks/types.ts` — types only
+### `hooks/data.ts` — init values only
 
 ```ts
-// data.ts
 export const userInitValues: UserType = { id: "", name: "", email: "", /* … */ };
 export const getDefaultUser = (): UserType => ({ ...userInitValues });
+```
 
-// validation.ts
+### `hooks/validation.ts` — form rules only
+
+```ts
 export const userValidation = {
   name: { required: { value: true, message: ConstKeys.REQUIRED } },
   email: {
@@ -139,17 +184,13 @@ export const userValidation = {
 };
 ```
 
-### `hooks/service.ts` — signals + AppHttp only
+### `hooks/service.{feature}.ts` — HTTP only
 
-**List / save**
+`service.*` files contain **HTTP calls + their signals only**. Popup / edit mode is `edit-mode.ts` (not a service). Each dropdown is `service-load.{selectName}.ts`.
 
 ```ts
+// hooks/service.list.ts
 export const userListIsLoading = signal(false);
-export const userSaveIsLoading = signal(false);
-export const userIsPopupOpen = signal(false);
-export const userIsEditMode = signal(false);
-export const userSelectedId = signal<string | undefined>(undefined);
-export const SelectedUser = signal<UserType | null>(null);
 
 export const userListCall = async (params: any) => {
   try {
@@ -162,6 +203,11 @@ export const userListCall = async (params: any) => {
     userListIsLoading.value = false;
   }
 };
+```
+
+```ts
+// hooks/service.save.ts
+export const userSaveIsLoading = signal(false);
 
 export const userSaveCall = async (params: any) => {
   try {
@@ -175,9 +221,8 @@ export const userSaveCall = async (params: any) => {
 };
 ```
 
-**Dropdowns — always `AppHttp.Load`**
-
 ```ts
+// hooks/service-load.languages.ts — one file per select, always AppHttp.Load
 export const languagesIsLoading = signal(false);
 export const languagesOptions = signal<OptionType[]>([]);
 
@@ -201,26 +246,83 @@ export const languagesLoadCall = async (id: string, params?: any) => {
 };
 ```
 
-**editModeUpdate · upload**
+```ts
+// hooks/service-load.country.ts — same AppHttp.Load pattern as languages
+export const countryIsLoading = signal(false);
+export const countryOptions = signal<OptionType[]>([]);
+
+export const countryLoadCall = async (id = "COUNTRIES", params?: any) => {
+  try {
+    countryIsLoading.value = true;
+    const resp = await AppHttp.Load(id, params);
+    const rows = resp?.data && Array.isArray(resp.data) ? resp.data : Array.isArray(resp) ? resp : [];
+    countryOptions.value = rows.map((row: any) => ({
+      label: row.label, value: row.label, key: row.key, disabled: row.disabled || false,
+    }));
+  } catch (error: any) {
+    ShowToast(t(error?.error?.message || ConstKeys.WENT_WRONG), "warning");
+    countryOptions.value = [];
+  } finally {
+    countryIsLoading.value = false;
+  }
+};
+```
 
 ```ts
+// hooks/service-load.role.ts — same AppHttp.Load pattern as languages
+export const roleIsLoading = signal(false);
+export const roleOptions = signal<OptionType[]>([]);
+
+export const roleLoadCall = async (id = "ROLES", params?: any) => {
+  try {
+    roleIsLoading.value = true;
+    const resp = await AppHttp.Load(id, params);
+    const rows = resp?.data && Array.isArray(resp.data) ? resp.data : Array.isArray(resp) ? resp : [];
+    roleOptions.value = rows.map((row: any) => ({
+      label: row.label, value: row.label, key: row.key, disabled: row.disabled || false,
+    }));
+  } catch (error: any) {
+    ShowToast(t(error?.error?.message || ConstKeys.WENT_WRONG), "warning");
+    roleOptions.value = [];
+  } finally {
+    roleIsLoading.value = false;
+  }
+};
+```
+
+```ts
+// hooks/edit-mode.ts — not HTTP, not a service
+import { getDefaultUser } from "./data";
+import { AppStorage, SCREEN_ACTION } from "@/util/app.storage";
+
+export const userIsPopupOpen = signal(false);
+export const userIsEditMode = signal(false);
+export const userSelectedId = signal<string | undefined>(undefined);
+export const SelectedUser = signal<UserType | null>(null);
+
 export const editModeUpdate = async (id?: string, mode?: "edit" | "add") => {
   if (mode === "add") {
-    SelectedUser.value = {} as UserType;
+    SelectedUser.value = getDefaultUser();
     userSelectedId.value = undefined;
     userIsEditMode.value = true;
     userIsPopupOpen.value = true;
+    AppStorage.Set(SCREEN_ACTION, "user:form");
   } else if (id) {
     userSelectedId.value = id;
     userIsEditMode.value = mode === "edit";
     userIsPopupOpen.value = true;
+    AppStorage.Set(SCREEN_ACTION, mode === "edit" ? `user:form-${id}` : `user:view-${id}`);
   } else {
     userSelectedId.value = undefined;
     userIsEditMode.value = false;
     userIsPopupOpen.value = false;
+    AppStorage.Set(SCREEN_ACTION, "user:list");
   }
 };
+```
 
+```ts
+// hooks/service.upload.ts
 export const uploadFile = async (file: any) => {
   const fileUploadUrl = await AppHttp.Post("/astropeace-util/s3/upload-url", {
     fileName: file.name || file.fileName,
@@ -236,88 +338,183 @@ Never raw `fetch` / axios — only `AppHttp`.
 
 ## Form / view — `useMemo` props → Type* spread
 
+Logic in `components/{module}.form.ts` / `{module}.view.ts`. HTML in `components/{module}.form.tsx` / `{module}.view.tsx`. Same basename; `.tsx` imports `./{module}.form.ts`.
+
+```ts
+// components/user.form.ts — TypeScript only
+import { getDefaultUser, userInitValues } from "../hooks/data";
+import { userValidation } from "../hooks/validation";
+import { userSaveCall, userSaveIsLoading } from "../hooks/service.save";
+import { languagesOptions } from "../hooks/service-load.languages";
+import { countryOptions } from "../hooks/service-load.country";
+import { roleOptions } from "../hooks/service-load.role";
+
+export function useUserForm() {
+  const { control, formState: { errors } } = useForm<UserType>({
+    defaultValues: getDefaultUser(), // userInitValues from hooks/data.ts
+  });
+
+  const nameProps = useMemo(
+    () => ({
+      control,
+      name: "name",
+      label: t("name"),
+      rules: userValidation.name,
+      error: errors.name,
+    }),
+    [t, control, errors.name],
+  );
+
+  const cancelProps = useMemo(
+    () => ({
+      action: "secondary" as const,
+      label: t("cancel"),
+      onPress: onCancel,
+    }),
+    [t],
+  );
+
+  return { nameProps, cancelProps, defaultValues: userInitValues };
+}
+```
+
 ```tsx
-const nameProps = useMemo(
-  () => ({
-    control,
-    name: "name",
-    label: t("name"),
-    rules: userValidation.name,
-    error: errors.name,
-  }),
-  [t, control, errors.name],
-);
+// components/user.form.tsx — view / HTML
+import { useUserForm } from "./user.form.ts";
 
-const cancelProps = useMemo(
-  () => ({
-    action: "secondary" as const,
-    label: t("cancel"),
-    onPress: onCancel,
-  }),
-  [t],
-);
-
-// Keep ContentLayout / VStack JSX simple
-<VStack space="md" className="w-full">
-  <TypeInput {...nameProps} />
-  <TypeSelect {...telCodeProps} />      {/* options from AppHttp.Load */}
-  <TypeSwitch {...activeProps} />
-  <TypeButton {...cancelProps} />
-</VStack>
+export default function UserForm() {
+  const { nameProps, telCodeProps, countryProps, roleProps, activeProps, cancelProps } = useUserForm();
+  return (
+    <VStack space="md" className="w-full">
+      <TypeInput {...nameProps} />
+      <TypeSelect {...telCodeProps} />
+      <TypeSelect {...countryProps} />
+      <TypeSelect {...roleProps} />
+      <TypeSwitch {...activeProps} />
+      <TypeButton {...cancelProps} />
+    </VStack>
+  );
+}
 ```
 
 Rules:
 - Always `types/*` wrappers over gluestack `components/ui/*`
-- Dropdown options from `hooks/service` via `AppHttp.Load`
-- Defaults from `hooks/data.ts`; rules from `hooks/validation.ts`
+- Dropdown options from `hooks/service-load.{select}.ts` via `AppHttp.Load`
+- Validation from `hooks/validation.ts`; defaults from `hooks/data.ts` (`userInitValues` / `getDefaultUser()`)
 
 ---
 
 ## List page
 
-```tsx
-<VStack space="md" className="p-4">
-  <HStack className="justify-between items-center">
-    <Heading>{t("users")}</Heading>
-    <HStack space="sm">
-      <TypeInput {...searchProps} />
-      <TypeSelect {...zodiacSignProps} />
-      <TypeSwitch {...statusProps} />
-    </HStack>
-  </HStack>
+`components/{module}.list.ts` + `{module}.list.tsx`. No `grid.ts` — use `FlatList`.
 
-  {userListIsLoading.value ? (
-    <Skeleton className="h-40 w-full rounded-lg" />
-  ) : (
-    <FlatList data={rows} renderItem={renderItem} keyExtractor={(i) => i.id} />
-  )}
+```ts
+// components/user.list.ts — TypeScript only
+import { userListCall, userListIsLoading } from "../hooks/service.list";
+import { zodiacSignOptions } from "../hooks/service-load.zodiacSign";
+import { editModeUpdate } from "../hooks/edit-mode";
 
-  <TypeButton {...reloadProps} />
-</VStack>
+export function useUserList() {
+  const searchProps = useMemo(
+    () => ({ name: "search", label: t("search"), onChange: onSearch }),
+    [t],
+  );
+  const zodiacSignProps = useMemo(
+    () => ({ name: "zodiac", label: t("zodiac"), options: zodiacSignOptions.value }),
+    [t, zodiacSignOptions.value],
+  );
+  const statusProps = useMemo(
+    () => ({ name: "status", label: t("status"), onChange: onStatus }),
+    [t],
+  );
+  const reloadProps = useMemo(
+    () => ({ action: "secondary" as const, label: t("reload"), onPress: onReload }),
+    [t],
+  );
+  return { searchProps, zodiacSignProps, statusProps, reloadProps, rows, renderItem };
+}
 ```
 
-- Open row → `editModeUpdate(id)` / set `SelectedUser` + popup signals
+```tsx
+// components/user.list.tsx — HTML
+import { useUserList } from "./user.list.ts";
+
+export function UserList() {
+  const { searchProps, zodiacSignProps, statusProps, reloadProps, rows, renderItem } = useUserList();
+  return (
+    <VStack space="md" className="p-4">
+      <HStack className="justify-between items-center">
+        <Heading>{t("users")}</Heading>
+        <HStack space="sm">
+          <TypeInput {...searchProps} />
+          <TypeSelect {...zodiacSignProps} />
+          <TypeSwitch {...statusProps} />
+        </HStack>
+      </HStack>
+      {userListIsLoading.value ? (
+        <Skeleton className="h-40 w-full rounded-lg" />
+      ) : (
+        <FlatList data={rows} renderItem={renderItem} keyExtractor={(i) => i.id} />
+      )}
+      <TypeButton {...reloadProps} />
+    </VStack>
+  );
+}
+```
+
+- Open row → `editModeUpdate`
 - Status/edit → service calls (`userStatusCall`, `userListCall`)
 
 ---
 
 ## View page
 
+`components/{module}.view.ts` + `{module}.view.tsx`. Same basename; import `./{module}.view.ts`.
+
+```ts
+// components/user.view.ts — TypeScript only
+import { editModeUpdate, userSelectedId } from "../hooks/edit-mode";
+
+export function useUserView() {
+  const cancelProps = useMemo(
+    () => ({ action: "secondary" as const, label: t("cancel"), onPress: onCancel }),
+    [t],
+  );
+  const editActionProps = useMemo(
+    () => ({
+      action: "primary" as const,
+      label: t("edit"),
+      onPress: () => editModeUpdate(userSelectedId.value, "edit"),
+    }),
+    [t],
+  );
+  return { cancelProps, editActionProps };
+}
+```
+
 ```tsx
-<VStack space="md" className="w-full">
-  <HStack className="justify-between">
-    <Heading size="md">{t("userView")}</Heading>
-    <TypeButton {...cancelProps} />
-  </HStack>
-  {!SelectedUser.value ? (
-    <Skeleton className="h-40 w-full rounded-lg" />
-  ) : (
-    <Card className="p-4">
-      <Text>{SelectedUser.value.name}</Text>
-      {ScreenAccess.value.update && <TypeButton {...editActionProps} />}
-    </Card>
-  )}
-</VStack>
+// components/user.view.tsx — HTML
+import { useUserView } from "./user.view.ts";
+
+export default function UserView() {
+  const { cancelProps, editActionProps } = useUserView();
+  return (
+    <VStack space="md" className="w-full">
+      <HStack className="justify-between">
+        <Heading size="md">{t("userView")}</Heading>
+        <TypeButton {...cancelProps} />
+      </HStack>
+      {!SelectedUser.value ? (
+        <Skeleton className="h-40 w-full rounded-lg" />
+      ) : (
+        <Card className="p-4">
+          <Text>{SelectedUser.value.name}</Text>
+          {ScreenAccess.value.update && <TypeButton {...editActionProps} />}
+        </Card>
+      )}
+    </VStack>
+  );
+}
 ```
 
 ---
@@ -327,24 +524,26 @@ Rules:
 | # | Rule |
 |---|------|
 | 1 | App route: Suspense + Skeleton + `ScreenAccess.value.read` |
-| 2 | No auth inside `{module}.page` / list / form / view |
-| 3 | Every module has `hooks/{data,types,service,validation}.ts` |
-| 4 | HTTP + signals + `editModeUpdate` + upload only in `hooks/service.ts` |
-| 5 | Dropdowns via `AppHttp.Load` → options signals |
-| 6 | List/save via `AppHttp.Get` / `Post` with `*IsLoading` signals |
-| 7 | UI via `types/*` wrapping gluestack (`components/ui/*`) — `useMemo` + `{...props}` |
-| 8 | Prefer official gluestack components from the [docs catalog](https://gluestack.io/ui/docs/components/all-components) |
-| 9 | Overlay: gluestack `Modal` / `Drawer` / `Actionsheet` |
-| 10 | Layout: `Box` / `VStack` / `HStack` (+ project layouts if present) |
+| 2 | No auth / no `SCREEN_ACTION` inside list / form / view |
+| 3 | `{module}.page` only: `AppStorage.Get(SCREEN_ACTION)` → list / view-{id} / form-{id} / form (new) |
+| 4 | Every module has `hooks/{data,types,validation,edit-mode}.ts` + HTTP `hooks/service.{list,save,upload}.ts` + `hooks/service-load.{select}.ts` |
+| 5 | HTTP + its signals only in `service.*` / `service-load.{select}.ts`; popup in `edit-mode.ts` |
+| 6 | Dropdowns via `AppHttp.Load` → options signals |
+| 7 | List/save via `AppHttp.Get` / `Post` with `*IsLoading` signals |
+| 8 | UI via `types/*` wrapping gluestack (`components/ui/*`) — `useMemo` + `{...props}` |
+| 9 | Prefer official gluestack components from the [docs catalog](https://gluestack.io/ui/docs/components/all-components) |
+| 10 | Overlay: gluestack `Modal` / `Drawer` / `Actionsheet` |
+| 11 | Layout: `Box` / `VStack` / `HStack` (+ project layouts if present) |
+| 12 | List/form/view live under `components/` — `.ts` logic, `.tsx` HTML, same basename — no `grid.ts` |
 
 ---
 
 ## Checklist
 
-1. `hooks/types.ts` · `data.ts` · `service.ts` · `validation.ts`
-2. `{module}.page.tsx` — list + Modal/Drawer form/view
-3. `{module}.list.tsx` — filters + list/skeleton
-4. `{module}.form.tsx` — useMemo props → Type* spreads
-5. `{module}.view.tsx` — read-only + edit actions
+1. `hooks/types.ts` · `data.ts` · `validation.ts` · `edit-mode.ts` · `service.{list,save,upload}.ts` · `service-load.{select}.ts`
+2. `{module}.page.tsx` — ScreenAction (`{module}:list` / `view-{id}` / `form-{id}` / `form`) + Modal/Drawer
+3. `components/{module}.list.ts` + `{module}.list.tsx` — filters + FlatList/skeleton
+4. `components/{module}.form.ts` + `{module}.form.tsx` — useMemo props → Type* spreads
+5. `components/{module}.view.ts` + `{module}.view.tsx` — read-only + edit actions
 6. `app/...` route — Suspense + ScreenAccess
 7. Use gluestack primitives only through `types/` or `components/ui/`
