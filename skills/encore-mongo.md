@@ -79,7 +79,7 @@ path: "/save-user"            // reversed order
 All methods must be static, PascalCase, and have a Service postfix. **Every service must have Db(), CollectionService(), SchemaService(), EntityByIdService(id), SaveService, and SearchService.**
 
 ```ts
-export default class UserService {
+export class UserService {
   static Db() { ... }                              // required — returns tenant Mongo client/db helper
   static CollectionService() { ... }               // required — returns collection (e.g. db().collection("users"))
   static SchemaService() { ... }                   // required — returns schema (e.g. userSchema)
@@ -198,7 +198,7 @@ Use unified ResponseType format:
 Service class pattern (static methods only). Each service method max **25 lines**. Use `Collection()` / `Db()` for tenant Mongo access. Never hardcode collection access outside `CollectionService()`.
 
 ```ts
-export default class UserService {
+export class UserService {
   static Db() {
     return db(); // tenant-scoped Mongo helper from app-util
   }
@@ -326,6 +326,7 @@ await fetch("/external/path", { method: "POST", body: JSON.stringify(body) });
 | 12 | API paths: kebab-case only (xxx-yyy-zzz); with param use xxx-yyy/:param (e.g. lang-entity/:id) |
 | 13 | APIs only in `.api.ts`; business logic only in `.service.ts` |
 | 14 | For any HTTP/fetch call, always use `app-http` functions from the `utils` folder — never raw `fetch` / axios |
+| 15 | Named exports only (`export class UserService`). Always `import { UserService }`. No `export default` / `import X from` |
 
 ---
 

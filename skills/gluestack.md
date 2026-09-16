@@ -75,16 +75,17 @@ import { Suspense } from "react";
 import { VStack } from "@/components/ui/vstack";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScreenAccess } from "@/util/app.event";
-import PermissionDenied from "@/components/PermissionDenied";
+import { PermissionDenied } from "@/components/PermissionDenied";
 import { UserPage } from "@/modules/profiles/users/user.page";
 
-export default function ProfileRoute() {
+export function ProfileRoute() {
   return (
     <Suspense fallback={<SkeletonPage />}>
       {ScreenAccess.value.read ? <UserPage /> : <PermissionDenied />}
     </Suspense>
   );
 }
+export { ProfileRoute as default }; // Expo route file only
 
 function SkeletonPage() {
   return (
@@ -106,42 +107,23 @@ ScreenAction **only here** — never in list / form / view. Read `AppStorage.Get
 | Action | Result |
 |--------|--------|
 | `{module}:list` | popup closed |
-| `{module}:view-{id}` | open view |
-| `{module}:form-{id}` | open form (edit) |
-| `{module}:form` (no `-id`) | open form (new / add) |
+| `{module}:view:{id}` | open view |
+| `{module}:form:{id}` | open form (edit) |
+| `{module}:form` (no `:{id}`) | open form (new / add) |
 
 ```tsx
 // user.page.tsx
 import { useEffect } from "react";
 import { useSignals } from "@preact/signals-react/runtime";
 import { Modal, ModalBackdrop, ModalContent, ModalBody } from "@/components/ui/modal";
-import { AppStorage, SCREEN_ACTION } from "@/util/app.storage";
-import { editModeUpdate, userIsEditMode, userIsPopupOpen } from "./hooks/edit-mode";
-import UserForm from "./components/user.form";
+import { applyScreenAction, editModeUpdate, userIsEditMode, userIsPopupOpen } from "./hooks/edit-mode";
+import { UserForm } from "./components/user.form";
 import { UserList } from "./components/user.list";
-import UserView from "./components/user.view";
-
-function applyUserScreenAction() {
-  const action = String(AppStorage.Get(SCREEN_ACTION) || "user:list");
-  if (action === "user:list") {
-    editModeUpdate(undefined);
-    return;
-  }
-  if (action.startsWith("user:view-")) {
-    const id = action.slice("user:view-".length);
-    editModeUpdate(id || undefined);
-    return;
-  }
-  if (action.startsWith("user:form")) {
-    const id = action.startsWith("user:form-") ? action.slice("user:form-".length) : "";
-    if (!id) editModeUpdate(undefined, "add");
-    else editModeUpdate(id, "edit");
-  }
-}
+import { UserView } from "./components/user.view";
 
 export function UserPage() {
   useSignals();
-  useEffect(() => { applyUserScreenAction(); }, []);
+  useEffect(() => { applyScreenAction(); }, []);
   return (
     <>
       <UserList />
@@ -174,12 +156,27 @@ export const getDefaultUser = (): UserType => ({ ...userInitValues });
 
 ### `hooks/validation.ts` — form rules only
 
+Messages **always** `ConstKeys.*` — never raw strings.
+
 ```ts
 export const userValidation = {
   name: { required: { value: true, message: ConstKeys.REQUIRED } },
   email: {
     required: { value: true, message: ConstKeys.REQUIRED },
-    pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email" },
+    pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: ConstKeys.INVALID_EMAIL },
+  },
+  phone: {
+    required: { value: true, message: ConstKeys.REQUIRED },
+    minLength: { value: 10, message: ConstKeys.MIN_LENGTH },
+    maxLength: { value: 15, message: ConstKeys.MAX_LENGTH },
+  },
+  telCode: { required: { value: true, message: ConstKeys.REQUIRED } },
+  country: { required: { value: true, message: ConstKeys.REQUIRED } },
+  role: { required: { value: true, message: ConstKeys.REQUIRED } },
+  languages: { required: { value: true, message: ConstKeys.REQUIRED } },
+  password: {
+    required: { value: true, message: ConstKeys.REQUIRED },
+    minLength: { value: 8, message: ConstKeys.MIN_LENGTH },
   },
 };
 ```
@@ -300,6 +297,23 @@ export const userIsEditMode = signal(false);
 export const userSelectedId = signal<string | undefined>(undefined);
 export const SelectedUser = signal<UserType | null>(null);
 
+export const applyScreenAction = () => {
+  const action = String(AppStorage.Get(SCREEN_ACTION) || "user:list");
+  const [, kind, id] = action.split(":");
+  if (!kind || kind === "list") {
+    editModeUpdate(undefined);
+    return;
+  }
+  if (kind === "view") {
+    editModeUpdate(id || undefined);
+    return;
+  }
+  if (kind === "form") {
+    if (!id) editModeUpdate(undefined, "add");
+    else editModeUpdate(id, "edit");
+  }
+};
+
 export const editModeUpdate = async (id?: string, mode?: "edit" | "add") => {
   if (mode === "add") {
     SelectedUser.value = getDefaultUser();
@@ -311,7 +325,7 @@ export const editModeUpdate = async (id?: string, mode?: "edit" | "add") => {
     userSelectedId.value = id;
     userIsEditMode.value = mode === "edit";
     userIsPopupOpen.value = true;
-    AppStorage.Set(SCREEN_ACTION, mode === "edit" ? `user:form-${id}` : `user:view-${id}`);
+    AppStorage.Set(SCREEN_ACTION, mode === "edit" ? `user:form:${id}` : `user:view:${id}`);
   } else {
     userSelectedId.value = undefined;
     userIsEditMode.value = false;
@@ -382,7 +396,7 @@ export function useUserForm() {
 // components/user.form.tsx — view / HTML
 import { useUserForm } from "./user.form.ts";
 
-export default function UserForm() {
+export function UserForm() {
   const { nameProps, telCodeProps, countryProps, roleProps, activeProps, cancelProps } = useUserForm();
   return (
     <VStack space="md" className="w-full">
@@ -400,7 +414,7 @@ export default function UserForm() {
 Rules:
 - Always `types/*` wrappers over gluestack `components/ui/*`
 - Dropdown options from `hooks/service-load.{select}.ts` via `AppHttp.Load`
-- Validation from `hooks/validation.ts`; defaults from `hooks/data.ts` (`userInitValues` / `getDefaultUser()`)
+- Validation from `hooks/validation.ts` (`ConstKeys` messages only); defaults from `hooks/data.ts` (`userInitValues` / `getDefaultUser()`)
 
 ---
 
@@ -496,7 +510,7 @@ export function useUserView() {
 // components/user.view.tsx — HTML
 import { useUserView } from "./user.view.ts";
 
-export default function UserView() {
+export function UserView() {
   const { cancelProps, editActionProps } = useUserView();
   return (
     <VStack space="md" className="w-full">
@@ -525,7 +539,7 @@ export default function UserView() {
 |---|------|
 | 1 | App route: Suspense + Skeleton + `ScreenAccess.value.read` |
 | 2 | No auth / no `SCREEN_ACTION` inside list / form / view |
-| 3 | `{module}.page` only: `AppStorage.Get(SCREEN_ACTION)` → list / view-{id} / form-{id} / form (new) |
+| 3 | `{module}.page` only: `AppStorage.Get(SCREEN_ACTION)` → `{module}:list` / `{module}:view:{id}` / `{module}:form:{id}` / `{module}:form` |
 | 4 | Every module has `hooks/{data,types,validation,edit-mode}.ts` + HTTP `hooks/service.{list,save,upload}.ts` + `hooks/service-load.{select}.ts` |
 | 5 | HTTP + its signals only in `service.*` / `service-load.{select}.ts`; popup in `edit-mode.ts` |
 | 6 | Dropdowns via `AppHttp.Load` → options signals |
@@ -535,13 +549,14 @@ export default function UserView() {
 | 10 | Overlay: gluestack `Modal` / `Drawer` / `Actionsheet` |
 | 11 | Layout: `Box` / `VStack` / `HStack` (+ project layouts if present) |
 | 12 | List/form/view live under `components/` — `.ts` logic, `.tsx` HTML, same basename — no `grid.ts` |
+| 13 | Named exports only (`export function X`). Always `import { X }`. No `export default` / `import X from`. Expo route only: `export { ProfileRoute as default }` |
 
 ---
 
 ## Checklist
 
 1. `hooks/types.ts` · `data.ts` · `validation.ts` · `edit-mode.ts` · `service.{list,save,upload}.ts` · `service-load.{select}.ts`
-2. `{module}.page.tsx` — ScreenAction (`{module}:list` / `view-{id}` / `form-{id}` / `form`) + Modal/Drawer
+2. `{module}.page.tsx` — ScreenAction (`{module}:list` / `{module}:view:{id}` / `{module}:form:{id}` / `{module}:form`) + Modal/Drawer
 3. `components/{module}.list.ts` + `{module}.list.tsx` — filters + FlatList/skeleton
 4. `components/{module}.form.ts` + `{module}.form.tsx` — useMemo props → Type* spreads
 5. `components/{module}.view.ts` + `{module}.view.tsx` — read-only + edit actions

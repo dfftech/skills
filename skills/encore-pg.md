@@ -79,7 +79,7 @@ path: "/save-user"            // reversed order
 All methods must be static, PascalCase, and have a Service postfix. **Every service must have Db(), EntityService(), EntityByIdService(id), SaveService, and SearchService.**
 
 ```ts
-export default class UserService {
+export class UserService {
   static Db() { ... }                         // required — returns session_db()
   static EntityService() { ... }               // required — returns entity table (e.g. userEntity)
   static async EntityByIdService(id: string) { ... }  // required — fetch one entity by id (path param)
@@ -197,7 +197,7 @@ Use unified ResponseType format:
 Service class pattern (static methods only). Each service method max **25 lines**. Use `session_db()` for tenant DB, `core_db()` for core/registry. **Every service class must have Db() and EntityService().**
 
 ```ts
-export default class UserService {
+export class UserService {
   static Db() {
     return session_db();
   }
@@ -324,6 +324,7 @@ await fetch("/external/path", { method: "POST", body: JSON.stringify(body) });
 | 12 | API paths: kebab-case only (xxx-yyy-zzz); with param use xxx-yyy/:param (e.g. lang-entity/:id) |
 | 13 | APIs only in `.api.ts`; business logic only in `.service.ts` |
 | 14 | For any HTTP/fetch call, always use `app-http` functions from the `utils` folder — never raw `fetch` / axios |
+| 15 | Named exports only (`export class UserService`). Always `import { UserService }`. No `export default` / `import X from` |
 
 ---
 
