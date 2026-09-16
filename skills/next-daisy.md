@@ -8,7 +8,7 @@ description: >
 
 # Next.js + daisyUI System Prompt
 
-Stack: Next.js App Router · daisyUI/Tailwind · signals · AppHttp · `types/*` · AgGrid
+Stack: Next.js App Router · daisyUI/Tailwind · signals · AppHttp · `dff-util` · `types/*` · AgGrid
 
 ---
 
@@ -32,10 +32,11 @@ modules/{path}/
 │   ├── data.ts                       ← init / default values
 │   ├── types.ts                      ← all types
 │   ├── validation.ts                 ← form rules
-│   ├── service.list.ts               ← list HTTP + signals
-│   ├── service.save.ts               ← save HTTP + signals
-│   ├── service.upload.ts             ← upload HTTP
-│   ├── service-load.languages.ts     ← one file per select (`service-load.{select}.ts`)
+│   ├── service.list.ts               ← one call: list HTTP + list signal
+│   ├── service.save.ts               ← one call: save HTTP + save signal
+│   ├── service.upload.ts             ← one call: upload HTTP
+│   ├── service.status.ts             ← one call per extra action (`service.{call}.ts`)
+│   ├── service-load.languages.ts     ← one file per select/load call (`service-load.{select}.ts`)
 │   ├── service-load.country.ts
 │   ├── service-load.role.ts
 │   └── edit-mode.ts                  ← popup signals + editModeUpdate (not HTTP)
@@ -140,21 +141,92 @@ export const userInitValues: UserType = { id: "", name: "", email: "", /* … */
 export const getDefaultUser = (): UserType => ({ ...userInitValues });
 ```
 
+### `dff-util` types / constants / keys / patterns
+
+Use shared `dff-util` exports instead of local duplicates:
+
+```ts
+import {
+  AppAddDays,
+  AppCode,
+  AppCodeByType,
+  AppDaysBack,
+  AppRandomString,
+  AppUUID4,
+  ConstKeys,
+  ConstValue,
+  CurrencyConvert,
+  DateAndTime,
+  DateTime12HrFormat,
+  DateTime24HrFormat,
+  DecodeBase64,
+  DecodeURL,
+  EncodeBase64,
+  EncodeURL,
+  LangCountryCode,
+  LangText,
+  QueryCond,
+  RegExp,
+  SafeDecode,
+  SafeEncode,
+  TimeAgo,
+  TruncateText,
+  countries,
+  languages,
+  toCamelCase,
+  toEntityMapper,
+  toLowerCase,
+  toPascalCase,
+  toSchemaMapper,
+  toSnakeCase,
+  toUpperCase,
+  toViewMapper,
+} from "dff-util";
+import type {
+  CountryType,
+  FileType,
+  KeyValueType,
+  LangCountryType,
+  LangDirType,
+  LanguageType,
+  OptionType,
+  OrderType,
+  RequestBodyType,
+  RequestByIdType,
+  RequestQueryType,
+  ResponseType,
+  SearchType,
+  ThemeType,
+} from "dff-util";
+```
+
+- Request/response types: `ResponseType`, `SearchType`, `KeyValueType`, `RequestBodyType`, `RequestQueryType`, `RequestByIdType`
+- File/options/domain types: `FileType`, `OptionType`, `CountryType`, `LanguageType`, `LangCountryType`, `LangDirType`, `OrderType`, `ThemeType`
+- Constants: `ConstValue.ASC`, `ConstValue.DESC`, `ConstValue.LTR`, `ConstValue.RTL`, `ConstValue.LIGHT`, `ConstValue.DARK`, `ConstValue.EMPTY`
+- Message keys: use `ConstKeys.*`; common validation keys are `REQUIRED`, `MIN_LENGTH_REQUIRED`, `MAX_LENGTH_EXCEED`, `INVALID_EMAIL`, `INVALID_PHONE`, `FIELD_MUST_BE_NUMERIC`, `FIELD_MUST_BE_ALPHABETIC`, `FIELD_MUST_BE_ALPHANUMERIC`, `PASSWORD_TOO_WEAK`, `INVALID_URL`, `FILE_TOO_LARGE`, `WENT_WRONG`
+- Patterns: use `RegExp.EMAIL`, `RegExp.DIGITS_ONLY`, `RegExp.ALPHABETS_ONLY`, `RegExp.ALPHA_NUMERIC`, `RegExp.URL`, `RegExp.PHONE_US`, `RegExp.STRONG_PASSWORD`, `RegExp.DATE_YYYY_MM_DD`, `RegExp.TIME_HH_MM`, `RegExp.ISO_DATETIME`, `RegExp.UUID_V4`, `RegExp.AMOUNT_DECIMAL`, `RegExp.PERCENTAGE`
+- Lists and locale helpers: use `countries`, `languages`, `LangCountryCode`, `LangText`, and `CurrencyConvert` for country/language/currency flows instead of hardcoded arrays or ad hoc locale maps
+- Utility functions: use `AppUUID4`, `AppRandomString`, `AppCode`, `AppCodeByType`, `AppDaysBack`, `AppAddDays`, `TruncateText`, `DateTime24HrFormat`, `DateTime12HrFormat`, `DateAndTime`, `TimeAgo`, `EncodeBase64`, `DecodeBase64`, `EncodeURL`, `DecodeURL`, `SafeEncode`, `SafeDecode`, `QueryCond`
+- Case and mapper helpers: use `toCamelCase`, `toSnakeCase`, `toPascalCase`, `toUpperCase`, `toLowerCase`, `toViewMapper`, `toEntityMapper`, `toSchemaMapper` when converting API/entity/view shapes
+
+Do not create module-local copies of common messages, max length keys, regex patterns, country/language lists, request types, response envelope types, date/text helpers, encoding helpers, query parsers, or case/entity mappers when the project already has `dff-util`. Keep using the project `AppHttp` wrapper for HTTP when it exists; use `dff-util` `Http` only in projects that do not provide an `AppHttp` wrapper or explicitly wrap it.
+
 ### `hooks/validation.ts` — form rules only
 
-Messages **always** `ConstKeys.*` — never raw strings.
+Messages **always** `ConstKeys.*`; patterns **always** `RegExp.*` when one exists — never raw strings or inline common regexes.
 
 ```ts
 export const userValidation = {
   name: { required: { value: true, message: ConstKeys.REQUIRED } },
   email: {
     required: { value: true, message: ConstKeys.REQUIRED },
-    pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: ConstKeys.INVALID_EMAIL },
+    pattern: { value: RegExp.EMAIL, message: ConstKeys.INVALID_EMAIL },
   },
   phone: {
     required: { value: true, message: ConstKeys.REQUIRED },
-    minLength: { value: 10, message: ConstKeys.MIN_LENGTH },
-    maxLength: { value: 15, message: ConstKeys.MAX_LENGTH },
+    pattern: { value: RegExp.DIGITS_ONLY, message: ConstKeys.INVALID_PHONE },
+    minLength: { value: 10, message: ConstKeys.MIN_LENGTH_REQUIRED },
+    maxLength: { value: 15, message: ConstKeys.MAX_LENGTH_EXCEED },
   },
   telCode: { required: { value: true, message: ConstKeys.REQUIRED } },
   country: { required: { value: true, message: ConstKeys.REQUIRED } },
@@ -162,20 +234,21 @@ export const userValidation = {
   languages: { required: { value: true, message: ConstKeys.REQUIRED } },
   password: {
     required: { value: true, message: ConstKeys.REQUIRED },
-    minLength: { value: 8, message: ConstKeys.MIN_LENGTH },
+    pattern: { value: RegExp.STRONG_PASSWORD, message: ConstKeys.PASSWORD_TOO_WEAK },
+    minLength: { value: 8, message: ConstKeys.MIN_LENGTH_REQUIRED },
   },
 };
 ```
 
-### `hooks/service.{feature}.ts` — HTTP only
+### `hooks/service.{call}.ts` — one call per service file
 
-`service.*` files contain **HTTP calls + their signals only**. Popup / edit mode is `edit-mode.ts` (not a service). Each dropdown is `service-load.{selectName}.ts`.
+`service.*` files contain **one HTTP call + that call's signals only**. Popup / edit mode is `edit-mode.ts` (not a service). Do not group unrelated calls into one service file. If the module has list, save, entity-by-id, status, delete, restore, export, upload, or any other action, create one file per call: `service.list.ts`, `service.save.ts`, `service.entity.ts`, `service.status.ts`, `service.delete.ts`, `service.restore.ts`, `service.export.ts`, `service.upload.ts`, etc. Each dropdown/load call is also isolated as `service-load.{selectName}.ts`.
 
 ```ts
 // hooks/service.list.ts
 export const userListIsLoading = signal(false);
 
-export const userListCall = async (params: any) => {
+export const userListCall = async (params: SearchType): Promise<ResponseType | undefined> => {
   try {
     userListIsLoading.value = true;
     const resp = await AppHttp.Get(AppHttp.MsUrl.base + "/profile/search", params);
@@ -192,7 +265,7 @@ export const userListCall = async (params: any) => {
 // hooks/service.save.ts
 export const userSaveIsLoading = signal(false);
 
-export const userSaveCall = async (params: any) => {
+export const userSaveCall = async (params: RequestBodyType): Promise<ResponseType | undefined> => {
   try {
     userSaveIsLoading.value = true;
     return await AppHttp.Post(AppHttp.MsUrl.base + "/profile/save", params);
@@ -205,20 +278,18 @@ export const userSaveCall = async (params: any) => {
 ```
 
 ```ts
-// hooks/service-load.languages.ts — one file per select, always AppHttp.Load
+// hooks/service-load.languages.ts — use dff-util languages for static language lists
 export const languagesIsLoading = signal(false);
 export const languagesOptions = signal<OptionType[]>([]);
 
-export const languagesLoadCall = async (id: string, params?: any) => {
+export const languagesLoadCall = () => {
   try {
     languagesIsLoading.value = true;
-    const resp = await AppHttp.Load(id, params);
-    const rows = resp?.data && Array.isArray(resp.data) ? resp.data : Array.isArray(resp) ? resp : [];
-    languagesOptions.value = rows.map((lang: any) => ({
-      label: lang.label,
-      value: lang.label,
-      key: lang.key,
-      disabled: lang.disabled || false,
+    languagesOptions.value = languages.map((lang) => ({
+      label: lang.name,
+      value: lang.lang,
+      key: lang.lang,
+      lang: { locale: lang.locale, dir: lang.dir },
     }));
   } catch (error: any) {
     ShowToast(t(error?.error?.message || ConstKeys.WENT_WRONG), "warning");
@@ -230,17 +301,24 @@ export const languagesLoadCall = async (id: string, params?: any) => {
 ```
 
 ```ts
-// hooks/service-load.country.ts — same AppHttp.Load pattern as languages
+// hooks/service-load.country.ts — use dff-util countries for static country lists
 export const countryIsLoading = signal(false);
 export const countryOptions = signal<OptionType[]>([]);
 
-export const countryLoadCall = async (id = "COUNTRIES", params?: any) => {
+export const countryLoadCall = () => {
   try {
     countryIsLoading.value = true;
-    const resp = await AppHttp.Load(id, params);
-    const rows = resp?.data && Array.isArray(resp.data) ? resp.data : Array.isArray(resp) ? resp : [];
-    countryOptions.value = rows.map((row: any) => ({
-      label: row.label, value: row.label, key: row.key, disabled: row.disabled || false,
+    countryOptions.value = countries.map((country) => ({
+      label: country.name,
+      value: country.code,
+      key: country.code,
+      icon: country.flag,
+      lang: {
+        locale: country.locale,
+        currency: country.currency,
+        currencyCode: country.currencyCode,
+        telCode: String(country.telCode),
+      },
     }));
   } catch (error: any) {
     ShowToast(t(error?.error?.message || ConstKeys.WENT_WRONG), "warning");
@@ -252,7 +330,7 @@ export const countryLoadCall = async (id = "COUNTRIES", params?: any) => {
 ```
 
 ```ts
-// hooks/service-load.role.ts — same AppHttp.Load pattern as languages
+// hooks/service-load.role.ts — AppHttp.Load for backend-controlled options
 export const roleIsLoading = signal(false);
 export const roleOptions = signal<OptionType[]>([]);
 
@@ -323,7 +401,7 @@ export const editModeUpdate = async (id?: string, mode?: "edit" | "add") => {
 
 ```ts
 // hooks/service.upload.ts
-export const uploadFile = async (file: File) => {
+export const uploadFile = async (file: File): Promise<FileType> => {
   const fileUploadUrl = await AppHttp.Post("/astropeace-util/s3/upload-url", {
     fileName: file.name,
   });
@@ -402,8 +480,9 @@ export function UserForm() {
 
 Rules:
 - Always use `types/*` (`TypeInput`, `TypeSelect`, `TypeSwitch`, `TypeButton`, `TypeDate`, `TypeList`, …)
-- Dropdown options come from `hooks/service-load.{select}.ts` signals filled by `AppHttp.Load`
-- Validation from `hooks/validation.ts` (`ConstKeys` messages only); defaults from `hooks/data.ts` (`userInitValues` / `getDefaultUser()`)
+- Dropdown options come from `hooks/service-load.{select}.ts` signals; use `dff-util` `countries` / `languages` for static country/language lists and `AppHttp.Load` only for backend-controlled option sets
+- Validation from `hooks/validation.ts` (`ConstKeys` messages and `RegExp` patterns only); defaults from `hooks/data.ts` (`userInitValues` / `getDefaultUser()`)
+- Every HTTP action used by form/view/list has its own hook service file; never import a grouped service that contains multiple calls.
 
 ---
 
@@ -541,22 +620,23 @@ export function UserView() {
 | 1 | App page: Suspense + Skeleton + `ScreenAccess.value.read` |
 | 2 | No auth / no `SCREEN_ACTION` inside list / form / view |
 | 3 | `{module}.page` only: `AppStorage.Get(SCREEN_ACTION)` → `{module}:list` / `{module}:view:{id}` / `{module}:form:{id}` / `{module}:form` |
-| 4 | Every module has `hooks/{data,types,validation,edit-mode}.ts` + HTTP `hooks/service.{list,save,upload}.ts` + `hooks/service-load.{select}.ts` |
-| 5 | HTTP + its signals only in `service.*` / `service-load.{select}.ts`; popup in `edit-mode.ts` |
-| 6 | Dropdowns via `AppHttp.Load` → options signals |
-| 7 | List/save via `AppHttp.Get` / `Post` with `*IsLoading` signals |
+| 4 | Every module has `hooks/{data,types,validation,edit-mode}.ts` + one `hooks/service.{call}.ts` per HTTP action + one `hooks/service-load.{select}.ts` per load/select action |
+| 5 | One call per hook service file: `service.{call}.ts` contains exactly one HTTP action and that action's signals; popup in `edit-mode.ts` |
+| 6 | Dropdowns via option signals: `dff-util` `countries` / `languages` for static country/language lists; `AppHttp.Load` for backend-controlled options |
+| 7 | List/save via `AppHttp.Get` / `Post` with `*IsLoading` signals and `dff-util` request/response types |
 | 8 | UI controls always from `types/` — props via `useMemo` + `{...props}` |
 | 9 | ContentLayout JSX stays simple: `<TypeInput {...emailProps} />` |
 | 10 | List uses ArticleLayout + GridLayout + FloatLayout |
 | 11 | List/form/view/grid live under `components/` — `.ts` logic, `.tsx` HTML, same basename |
 | 12 | Form/view use ArticleLayout + ContentLayout |
 | 13 | Named exports only (`export function X`). Always `import { X }`. No `export default` / `import X from`. Next.js `page.tsx` only: `export { User as default }` |
+| 14 | Use `dff-util` for shared constants, messages, patterns, request/response types, files/options/domain types, countries, languages, locale/currency helpers, date/text helpers, encoding helpers, `QueryCond`, and case/entity mappers; do not duplicate them locally |
 
 ---
 
 ## Checklist
 
-1. `hooks/types.ts` · `data.ts` · `validation.ts` · `edit-mode.ts` · `service.{list,save,upload}.ts` · `service-load.{select}.ts`
+1. `hooks/types.ts` · `data.ts` · `validation.ts` · `edit-mode.ts` · one `service.{call}.ts` per HTTP action · one `service-load.{select}.ts` per load/select action
 2. `{module}.page.tsx` — ScreenAction (`{module}:list` / `{module}:view:{id}` / `{module}:form:{id}` / `{module}:form`) + modal
 3. `components/{module}.list.ts` + `{module}.list.tsx` — AgGrid + filter props
 4. `components/{module}.form.ts` + `{module}.form.tsx` — useMemo props → Type* spreads
