@@ -34,14 +34,9 @@ modules/{path}/
 │   ├── data.ts                       ← init / default values
 │   ├── types.ts                      ← all types
 │   ├── validation.ts                 ← form rules
-│   ├── service.list.ts               ← one call: list HTTP + list signal
-│   ├── service.save.ts               ← one call: save HTTP + save signal
-│   ├── service.upload.ts             ← one call: upload HTTP
-│   ├── service.status.ts             ← one call per extra action (`service.{call}.ts`)
-│   ├── service-load.languages.ts     ← one file per select/load call (`service-load.{select}.ts`)
-│   ├── service-load.country.ts
-│   ├── service-load.role.ts
-│   └── edit-mode.ts                  ← popup signals + editModeUpdate (not HTTP)
+│   ├── service.ts                    ← popup/edit-mode/screen-action signals (not HTTP)
+│   ├── service-http.ts               ← all HTTP calls + their loading signals
+│   └── service-load.ts               ← all option/load calls + option/loading signals
 components/ui/   → gluestack primitives (button, input, select, modal, …)
 types/           → TypeButton, TypeInput, TypeSelect, TypeSwitch, … (ALWAYS use)
 layouts/         → ArticleLayout, ContentLayout, FloatLayout (optional)
@@ -117,7 +112,7 @@ ScreenAction **only here** — never in list / form / view. Read `AppStorage.Get
 import { useEffect } from "react";
 import { useSignals } from "@preact/signals-react/runtime";
 import { Modal, ModalBackdrop, ModalContent, ModalBody } from "@/components/ui/modal";
-import { applyScreenAction, editModeUpdate, userIsEditMode, userIsPopupOpen } from "./hooks/edit-mode";
+import { applyScreenAction, editModeUpdate, userIsEditMode, userIsPopupOpen } from "./hooks/service";
 import { UserForm } from "./components/user.form";
 import { UserList } from "./components/user.list";
 import { UserView } from "./components/user.view";
@@ -254,12 +249,12 @@ export const userValidation = {
 };
 ```
 
-### `hooks/service.{call}.ts` — one call per service file
+### `hooks/service-http.ts` — all HTTP calls
 
-`service.*` files contain **one HTTP call + that call's signals only**. Popup / edit mode is `edit-mode.ts` (not a service). Do not group unrelated calls into one service file. If the module has list, save, entity-by-id, status, delete, restore, export, upload, or any other action, create one file per call: `service.list.ts`, `service.save.ts`, `service.entity.ts`, `service.status.ts`, `service.delete.ts`, `service.restore.ts`, `service.export.ts`, `service.upload.ts`, etc. Each dropdown/load call is also isolated as `service-load.{selectName}.ts`.
+`service-http.ts` contains **all HTTP calls and their loading signals** for the module: list, save, entity-by-id, status, delete, restore, export, upload, and any other API action. Do not put HTTP calls in `service.ts`, `service-load.ts`, components, list/form/view logic files, or page files.
 
 ```ts
-// hooks/service.list.ts
+// hooks/service-http.ts
 export const userListIsLoading = signal(false);
 
 export const userListCall = async (params: SearchType): Promise<ResponseType | undefined> => {
@@ -276,7 +271,7 @@ export const userListCall = async (params: SearchType): Promise<ResponseType | u
 ```
 
 ```ts
-// hooks/service.save.ts
+// hooks/service-http.ts
 export const userSaveIsLoading = signal(false);
 
 export const userSaveCall = async (params: RequestBodyType): Promise<ResponseType | undefined> => {
@@ -292,7 +287,7 @@ export const userSaveCall = async (params: RequestBodyType): Promise<ResponseTyp
 ```
 
 ```ts
-// hooks/service-load.languages.ts — use dff-util languages for static language lists
+// hooks/service-load.ts — all option/load calls and option/loading signals
 export const languagesIsLoading = signal(false);
 export const languagesOptions = signal<OptionType[]>([]);
 
@@ -315,7 +310,7 @@ export const languagesLoadCall = () => {
 ```
 
 ```ts
-// hooks/service-load.country.ts — use dff-util countries for static country lists
+// hooks/service-load.ts — use dff-util countries for static country lists
 export const countryIsLoading = signal(false);
 export const countryOptions = signal<OptionType[]>([]);
 
@@ -344,7 +339,7 @@ export const countryLoadCall = () => {
 ```
 
 ```ts
-// hooks/service-load.role.ts — AppHttp.Load for backend-controlled options
+// hooks/service-load.ts — AppHttp.Load for backend-controlled options
 export const roleIsLoading = signal(false);
 export const roleOptions = signal<OptionType[]>([]);
 
@@ -366,7 +361,7 @@ export const roleLoadCall = async (id = "ROLES", params?: any) => {
 ```
 
 ```ts
-// hooks/edit-mode.ts — not HTTP, not a service
+// hooks/service.ts — popup/edit-mode/screen-action state only; no HTTP
 import { getDefaultUser } from "./data";
 import { AppStorage, SCREEN_ACTION } from "@/util/app.storage";
 
@@ -414,7 +409,7 @@ export const editModeUpdate = async (id?: string, mode?: "edit" | "add") => {
 ```
 
 ```ts
-// hooks/service.upload.ts
+// hooks/service-http.ts
 export const uploadFile = async (file: any): Promise<FileType> => {
   const fileUploadUrl = await AppHttp.Post("/astropeace-util/s3/upload-url", {
     fileName: file.name || file.fileName,
@@ -436,10 +431,8 @@ Logic in `components/{module}.form.ts` / `{module}.view.ts`. HTML in `components
 // components/user.form.ts — TypeScript only
 import { getDefaultUser, userInitValues } from "../hooks/data";
 import { userValidation } from "../hooks/validation";
-import { userSaveCall, userSaveIsLoading } from "../hooks/service.save";
-import { languagesOptions } from "../hooks/service-load.languages";
-import { countryOptions } from "../hooks/service-load.country";
-import { roleOptions } from "../hooks/service-load.role";
+import { userSaveCall, userSaveIsLoading } from "../hooks/service-http";
+import { languagesOptions, countryOptions, roleOptions } from "../hooks/service-load";
 
 export function useUserForm() {
   const { control, formState: { errors } } = useForm<UserType>({
@@ -491,9 +484,9 @@ export function UserForm() {
 
 Rules:
 - Always `types/*` wrappers over gluestack `components/ui/*`
-- Dropdown options from `hooks/service-load.{select}.ts` signals; use `dff-util` `countries` / `languages` for static country/language lists and `AppHttp.Load` only for backend-controlled option sets
+- Dropdown options from `hooks/service-load.ts` signals; use `dff-util` `countries` / `languages` for static country/language lists and `AppHttp.Load` only for backend-controlled option sets
 - Validation from `hooks/validation.ts` (`ConstKeys` messages and `RegExp` patterns only); defaults from `hooks/data.ts` (`userInitValues` / `getDefaultUser()`)
-- Every HTTP action used by form/view/list has its own hook service file; never import a grouped service that contains multiple calls.
+- Every HTTP action used by form/view/list is exported from `hooks/service-http.ts`; never put HTTP calls in components or `hooks/service.ts`.
 
 ---
 
@@ -503,9 +496,9 @@ Rules:
 
 ```ts
 // components/user.list.ts — TypeScript only
-import { userListCall, userListIsLoading } from "../hooks/service.list";
-import { zodiacSignOptions } from "../hooks/service-load.zodiacSign";
-import { editModeUpdate } from "../hooks/edit-mode";
+import { userListCall, userListIsLoading } from "../hooks/service-http";
+import { zodiacSignOptions } from "../hooks/service-load";
+import { editModeUpdate } from "../hooks/service";
 
 export function useUserList() {
   const searchProps = useMemo(
@@ -566,7 +559,7 @@ export function UserList() {
 
 ```ts
 // components/user.view.ts — TypeScript only
-import { editModeUpdate, userSelectedId } from "../hooks/edit-mode";
+import { editModeUpdate, userSelectedId } from "../hooks/service";
 
 export function useUserView() {
   const cancelProps = useMemo(
@@ -619,10 +612,10 @@ export function UserView() {
 | 1 | App route: Suspense + Skeleton + `ScreenAccess.value.read` |
 | 2 | No auth / no `SCREEN_ACTION` inside list / form / view |
 | 3 | `{module}.page` only: `AppStorage.Get(SCREEN_ACTION)` → `{module}:list` / `{module}:view:{id}` / `{module}:form:{id}` / `{module}:form` |
-| 4 | Every module has `hooks/{data,types,validation,edit-mode}.ts` + one `hooks/service.{call}.ts` per HTTP action + one `hooks/service-load.{select}.ts` per load/select action |
-| 5 | One call per hook service file: `service.{call}.ts` contains exactly one HTTP action and that action's signals; popup in `edit-mode.ts` |
-| 6 | Dropdowns via option signals: `dff-util` `countries` / `languages` for static country/language lists; `AppHttp.Load` for backend-controlled options |
-| 7 | List/save via `AppHttp.Get` / `Post` with `*IsLoading` signals and `dff-util` request/response types |
+| 4 | Every module has `hooks/{data,types,validation,service,service-http,service-load}.ts` |
+| 5 | `service-http.ts` contains all HTTP actions and loading signals; `service-load.ts` contains all load/option calls and option/loading signals; `service.ts` contains popup/edit-mode/screen-action state only |
+| 6 | Dropdowns via `service-load.ts` option signals: `dff-util` `countries` / `languages` for static country/language lists; `AppHttp.Load` for backend-controlled options |
+| 7 | List/save/status/delete/upload/etc. via `service-http.ts` with `AppHttp.Get` / `Post` and `dff-util` request/response types |
 | 8 | UI via `types/*` wrapping gluestack (`components/ui/*`) — `useMemo` + `{...props}` |
 | 9 | Prefer official gluestack components from the [docs catalog](https://gluestack.io/ui/docs/components/all-components) |
 | 10 | Overlay: gluestack `Modal` / `Drawer` / `Actionsheet` |
@@ -635,7 +628,7 @@ export function UserView() {
 
 ## Checklist
 
-1. `hooks/types.ts` · `data.ts` · `validation.ts` · `edit-mode.ts` · one `service.{call}.ts` per HTTP action · one `service-load.{select}.ts` per load/select action
+1. `hooks/types.ts` · `data.ts` · `validation.ts` · `service.ts` · `service-http.ts` · `service-load.ts`
 2. `{module}.page.tsx` — ScreenAction (`{module}:list` / `{module}:view:{id}` / `{module}:form:{id}` / `{module}:form`) + Modal/Drawer
 3. `components/{module}.list.ts` + `{module}.list.tsx` — filters + FlatList/skeleton
 4. `components/{module}.form.ts` + `{module}.form.tsx` — useMemo props → Type* spreads
